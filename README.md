@@ -4,16 +4,16 @@ Dieser Bot warnt vor POIs (Blitzer, etc.) basierend auf dem Live-Standort.
 
 ## Installation
 
-### Option A: Systemweit via APT (Empfohlen für Production/Service)
+### Installation (Systemweit)
+Da `python-telegram-bot` in Version 20+ benötigt wird, empfiehlt sich die Installation via `pip`. Auf Ubuntu 24.04+ (Noble) kann dies systemweit mit dem Flag `--break-system-packages` erfolgen:
+
 ```bash
 sudo apt update
-sudo apt install python3-telegram-bot python3-geopy python3-requests python3-cachetools python3-dotenv
+sudo apt install python3-pip python3-geopy python3-requests python3-cachetools python3-dotenv
+sudo pip3 install python-telegram-bot --break-system-packages
 ```
 
-### Option B: Via Pip (venv)
-```bash
-pip install -r requirements.txt
-```
+Alternativ wird die Verwendung eines `venv` empfohlen.
 
 2. Erstelle eine `.env` Datei mit deinem Telegram Bot Token:
    ```env
