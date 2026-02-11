@@ -1,0 +1,15 @@
+[Unit]
+Description=Telegram Blitzer-Warner Bot
+After=network.target
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/opt/ai_builder_data/users/763684262/projects/Fahrverbot
+ExecStart=/usr/bin/python3 src/bot.py
+Restart=always
+RestartSec=10
+EnvironmentFile=/opt/ai_builder_data/users/763684262/projects/Fahrverbot/.env
+
+[Install]
+WantedBy=multi-user.target
