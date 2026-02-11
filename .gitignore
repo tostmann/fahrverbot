@@ -1,0 +1,15 @@
+# AI Builder files
+MEMORY.md
+history.json
+last_execution.log
+project_config.json
+
+# Environment variables
+.env
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+venv/
+.venv/
