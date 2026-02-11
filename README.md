@@ -4,10 +4,16 @@ Dieser Bot warnt vor POIs (Blitzer, etc.) basierend auf dem Live-Standort.
 
 ## Installation
 
-1. Installiere die Abhängigkeiten:
-   ```bash
-   pip install -r requirements.txt
-   ```
+### Option A: Systemweit via APT (Empfohlen für Production/Service)
+```bash
+sudo apt update
+sudo apt install python3-telegram-bot python3-geopy python3-requests python3-cachetools python3-dotenv
+```
+
+### Option B: Via Pip (venv)
+```bash
+pip install -r requirements.txt
+```
 
 2. Erstelle eine `.env` Datei mit deinem Telegram Bot Token:
    ```env
