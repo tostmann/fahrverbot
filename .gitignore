@@ -1,11 +1,21 @@
-# AI Builder files
+# Agent-Guidance / Lab-State — NIEMALS in Git (projekt-übergreifende Regel)
+CLAUDE.md
 MEMORY.md
+GEMINI.md
+FACTS.md
+HARDWARE_STATUS.md
+
+# AI Builder files
 history.json
 last_execution.log
 project_config.json
 
-# Environment variables
+# Environment variables / Secrets
 .env
+.env.*
+*.key
+*.pem
+*.log
 
 # Python
 __pycache__/

@@ -13,12 +13,55 @@ logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
     level=logging.INFO
 )
+# httpx logs every Telegram getUpdates request at INFO level, including the full
+# URL — which embeds the bot token in cleartext. Silence it to WARNING so the
+# token never lands in journald/log files.
+logging.getLogger("httpx").setLevel(logging.WARNING)
 
 # Constants
 ATUDO_TYPES = "101,102,103,104,105,106,107,108,109,110,111,112,113,115,117,114,ts,0,1,2,3,4,5,6"
+# Zoom level passed to the atudo API. This does NOT change the geographic box;
+# it only controls server-side clustering. At z < 16 the API collapses dense
+# areas into {type:"cluster"} centroids that carry no id/info/vmax/desc, which
+# is useless for proximity warnings. z=16 returns individual POIs everywhere
+# (verified 2026-06-05: same box, z=16 fully de-clusters Berlin/München, no cap).
+POI_ZOOM = 16
+# atudo POI type taxonomy (from map.blitzer.de/v5 leaflet_project.js type_arr):
+#   101..113,115,117 = stationäre Blitzer (haben i.d.R. info.desc)
+#   114 = Tunnel, ts = Section Control, 0..6 = mobile Blitzer (KEIN info.desc)
+MOBILE_TYPES = {"0", "1", "2", "3", "4", "5", "6"}
 # Cache for 20 minutes (exceeds the required 10 min)
-POI_CACHE = TTLCache(maxsize=200, ttl=1200) 
+POI_CACHE = TTLCache(maxsize=200, ttl=1200)
 USER_DATA = {} # Stores user state: last_location, last_time, warned_pois
+
+
+def describe_poi(poi):
+    """Build a human-readable label for a POI against the CURRENT atudo schema.
+    Two schema facts handled here (verified 2026-06-05 against the live API):
+      * vmax lives at the TOP level of the POI, not inside info.
+      * mobile POIs (type 0-6) carry no info.desc, so we synthesise one.
+    """
+    info = poi.get("info") or {}
+    desc = info.get("desc")
+    if not desc:
+        t = str(poi.get("type", ""))
+        if t in MOBILE_TYPES:
+            desc = "Mobiler Blitzer"
+        elif t == "114":
+            desc = "Tunnelblitzer"
+        elif t == "ts":
+            desc = "Section Control"
+        else:
+            desc = "Gefahrenstelle"
+    # vmax is a top-level string; can be '0', '', 'v' (Speed=V) or '?' (zeitlich
+    # bedingt). Only render a numeric limit > 0.
+    try:
+        v = int(poi.get("vmax", ""))
+        if v > 0:
+            return f"{desc} ({v} km/h)"
+    except (ValueError, TypeError):
+        pass
+    return desc
 
 def get_pois(lat, lng):
     # Grid-based caching (0.1 degree resolution ~11km)
@@ -38,7 +81,7 @@ def get_pois(lat, lng):
     box = (grid_lat - lat_margin, grid_lng - lng_margin, 
            grid_lat + lat_margin, grid_lng + lng_margin)
     
-    url = f"https://cdn2.atudo.net/api/4.0/pois.php?type={ATUDO_TYPES}&z=10&box={box[0]:.4f},{box[1]:.4f},{box[2]:.4f},{box[3]:.4f}"
+    url = f"https://cdn2.atudo.net/api/4.0/pois.php?type={ATUDO_TYPES}&z={POI_ZOOM}&box={box[0]:.4f},{box[1]:.4f},{box[2]:.4f},{box[3]:.4f}"
     logging.info(f"Fetching POIs from: {url}")
     try:
         response = requests.get(url, timeout=10)
@@ -93,6 +136,12 @@ async def handle_location(update: Update, context: ContextTypes.DEFAULT_TYPE):
     nearest_poi_pos = None
     valid_pois = []
     for poi in pois:
+        # Skip server-side cluster aggregates: they have no id/info/vmax and only
+        # an averaged centroid, so warning on them would point at a phantom spot
+        # and hide the real cameras inside. With z=POI_ZOOM these should not
+        # appear, but filter defensively.
+        if poi.get('type') == 'cluster':
+            continue
         try:
             p_lat = float(poi.get('lat'))
             p_lng = float(poi.get('lng'))
@@ -110,11 +159,8 @@ async def handle_location(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not is_live:
         if nearest_dist != float('inf'):
             dist_km = nearest_dist / 1000
-            info = nearest_poi.get('info', {})
-            desc = info.get('desc', 'POI')
-            vmax = info.get('vmax', '')
-            label = f"{desc} ({vmax} km/h)" if vmax and vmax != '0' else desc
-            
+            label = describe_poi(nearest_poi)
+
             await msg.reply_text(
                 f"Statische Position empfangen. Der nächste POI ist ca. {dist_km:.2f} km entfernt:\n\n"
                 f"📍 *{label}*\n\n"
@@ -157,10 +203,7 @@ async def handle_location(update: Update, context: ContextTypes.DEFAULT_TYPE):
                         # Only warn if heading towards it (roughly)
                         old_dist = geodesic(state['last_pos'], p_pos).meters
                         if dist_to_poi < old_dist:
-                            info = poi.get('info', {})
-                            desc = info.get('desc', 'Gefahrenstelle')
-                            vmax = info.get('vmax', '')
-                            label = f"{desc} ({vmax} km/h)" if vmax and vmax != '0' else desc
+                            label = describe_poi(poi)
 
                             # 60s warning
                             if 50 < time_to_poi <= 70:
